@@ -1,4 +1,4 @@
-# Install script for directory: G:/esp/Espressif/frameworks/esp-idf-v5.0.2/components/esp_system/port
+# Install script for directory: E:/Espressif/frameworks/esp-idf-v4.2.2/components/esp_system/port
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)
@@ -32,13 +32,9 @@ if(NOT DEFINED CMAKE_CROSSCOMPILING)
   set(CMAKE_CROSSCOMPILING "TRUE")
 endif()
 
-# Set default install directory permissions.
-if(NOT DEFINED CMAKE_OBJDUMP)
-  set(CMAKE_OBJDUMP "G:/esp/Espressif/tools/xtensa-esp32-elf/esp-2022r1-11.2.0/xtensa-esp32-elf/bin/xtensa-esp32-elf-objdump.exe")
-endif()
-
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
-  # Include the install script for the subdirectory.
-  include("G:/esp/Esp32/innoway_nb_iot copy/build/esp-idf/esp_system/port/soc/esp32/cmake_install.cmake")
+  # Include the install script for each subdirectory.
+  include("E:/esp/NBiot/test5_vdt/build/esp-idf/esp_system/port/esp32/cmake_install.cmake")
+
 endif()
 
