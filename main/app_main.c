@@ -11,6 +11,7 @@
 
 #define EX_UART_NUM        UART_NUM_2
 #define POWER_GPIO_PIN     GPIO_NUM_18
+#define CMD_SIZE           300
 #define AT_CMD_SUCCESS_BIT (1 << 0)
 
 #define MQTT_SERVER "mqtt.innoway.vn"
@@ -24,7 +25,7 @@
     "d,\"longitude\":%f,\"latitude\":%f}\r\n"
 #define AT_CMD_PUB_MQTT "AT+SMPUB=\"messages/" DEVICE_ID "/update\",%d,0,1\r\n"
 
-static char at_cmd[][100] = {
+static char at_cmd[][CMD_SIZE] = {
     "ATE0\r\n",
     "AT+CENG?\r\n",
     "AT+CNACT=0,1\r\n",
@@ -33,31 +34,53 @@ static char at_cmd[][100] = {
     "AT+SMCONF=\"USERNAME\",\"" USERNAME "\"\r\n",
     "AT+SMCONF=\"PASSWORD\",\"" PASSWORD "\"\r\n",
     "AT+SMCONN\r\n",
+    "public_msg",
+    "public_data",
+    "AT+CPOWD=1\r\n",
 };
 
 static int delay_before_read[] = {
-    2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000,
+    2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000,
 };
 
-static char response_success[][100] = {
-    "OK", "OK", "OK", "OK", "OK", "OK", "OK", "OK",
+static char response_success[][CMD_SIZE] = {
+    "E0",     "CENG?",  "CNACT",    "SMCONF", "SMCONF", "SMCONF",
+    "SMCONF", "SMCONN", "AT+SMPUB", "",       "AT",
 };
 
 static EventGroupHandle_t xEventGroup;
 static EventBits_t uxBits;
 static const char *LOG_AT_CMD = "SEND_AT_CMD";
-static int tmp, cell, pci, rsrp, rsrq, sinr, cellid;
-static float longitude, latitude;
+static int tmp, cell = 0, pci = 0, rsrp = 0, rsrq = 0, sinr = 0, cellid = 0;
+static float longitude = 0, latitude = 0;
+static int current;  // Current AT_command send
 
 void data_CENG_handler(const char *data) {
-    char str[1024];
+    char str[CMD_SIZE];
     sscanf(data, "%[^:]:%[^:]: %d,\"%d, %d, %d, %d, %d, %d, %d, %d", str, str,
            &cell, &tmp, &pci, &rsrp, &tmp, &rsrq, &sinr, &tmp, &cellid);
+
+    char public_data[CMD_SIZE];
+    snprintf(public_data, CMD_SIZE, PUB_DATA, cell, pci, rsrp, rsrq, sinr,
+             cellid, longitude, latitude);
+
+    char public_mess[CMD_SIZE];
+    snprintf(public_mess, CMD_SIZE, AT_CMD_PUB_MQTT, strlen(public_data));
+
+    memcpy(at_cmd[8], public_mess, strlen(public_mess));
+    memcpy(at_cmd[9], public_data, strlen(public_data));
+    if (strstr(public_data, "public_data") == NULL) {
+        xEventGroupSetBits(xEventGroup, AT_CMD_SUCCESS_BIT);
+        ESP_LOGI("Set_CENG_data", "SUCCESS");
+    }
 }
 
 void data_uart_handler(char *data, int len) {
     ESP_LOGI("Receive_data", "%s", data);
-    xEventGroupSetBits(xEventGroup, AT_CMD_SUCCESS_BIT);
+    if (current == 1)
+        data_CENG_handler(data);
+    else if (strstr(data, response_success[current]))
+        xEventGroupSetBits(xEventGroup, AT_CMD_SUCCESS_BIT);
 }
 
 void powerOnSetup() {
@@ -66,29 +89,11 @@ void powerOnSetup() {
 }
 
 void powerOn() {
-    ESP_LOGI(LOG_AT_CMD, "Power on");
     gpio_set_level(POWER_GPIO_PIN, 1);
     vTaskDelay(2000 / portTICK_PERIOD_MS);
     gpio_set_level(POWER_GPIO_PIN, 0);
-    vTaskDelay(10000 / portTICK_PERIOD_MS);
-}
-
-void powerOff() {
-    ESP_LOGI(LOG_AT_CMD, "Power off");
-    uart_write_data("AT+CPOWD=1\r\n");
-}
-
-void pub_mqtt_data() {
-    char public_data[1024];
-    snprintf(public_data, 1024, PUB_DATA, cell, pci, rsrp, rsrq, sinr, cellid,
-             longitude, latitude);
-
-    char public_mess[1024];
-    snprintf(public_mess, 1024, AT_CMD_PUB_MQTT, strlen(public_data));
-
-    uart_set_delay_before_read_data(1000);
-    uart_write_data(public_mess);
-    uart_write_data(public_data);
+    ESP_LOGI(LOG_AT_CMD, "Power on");
+    vTaskDelay(10 / portTICK_PERIOD_MS);
 }
 
 bool send_at_handler(char *command, int current_at_cmd, int resend_count,
@@ -96,17 +101,19 @@ bool send_at_handler(char *command, int current_at_cmd, int resend_count,
     int current = current_at_cmd;
     int count = resend_count;
     uart_set_delay_before_read_data(delay_before_read);
-    while (current == current_at_cmd && resend_count > 0) {
+    while (current == current_at_cmd && count > 0) {
+        ESP_LOGI("Send_command", "%s", command);
         uart_write_data(command);
         uxBits = xEventGroupWaitBits(xEventGroup, AT_CMD_SUCCESS_BIT, pdTRUE,
-                                     pdFALSE, pdMS_TO_TICKS(2000));
+                                     pdFALSE,
+                                     pdMS_TO_TICKS(delay_before_read + 1000));
         if (uxBits & AT_CMD_SUCCESS_BIT) {
             current++;
         } else {
             count--;
         }
     }
-    if (count == 0)
+    if (count <= 0)
         return false;
     else
         return true;
@@ -114,23 +121,25 @@ bool send_at_handler(char *command, int current_at_cmd, int resend_count,
 
 void app_main(void) {
     powerOnSetup();
-    uart_setup(UART_NUM_2, GPIO_NUM_17, GPIO_NUM_16, 2048, data_uart_handler);
+    uart_setup(UART_NUM_2, GPIO_NUM_17, GPIO_NUM_16, 8192, data_uart_handler);
     xEventGroup = xEventGroupCreate();
     int at_cmd_array_len = sizeof(at_cmd) / sizeof(at_cmd[0]);
     bool isSuccess;
     while (1) {
         powerOn();
-
-        for (int current = 0; current < at_cmd_array_len; current++) {
+        for (current = 0; current < at_cmd_array_len; current++) {
             isSuccess = send_at_handler(at_cmd[current], current, 5,
                                         delay_before_read[current]);
             if (!isSuccess) break;
         }
-
-        // if (isSuccess) {
-        //     pub_mqtt_data();
-        // }
-
-        vTaskDelay(300000 / portTICK_PERIOD_MS);
+        current = at_cmd_array_len - 1;
+        isSuccess = send_at_handler(at_cmd[current], current, 5,
+                                    delay_before_read[current]);
+        if (isSuccess) {
+            ESP_LOGI(LOG_AT_CMD, "Power off");
+        } else {
+            ESP_LOGI(LOG_AT_CMD, "Power off FAILURE");
+        }
+        vTaskDelay(3000 / portTICK_PERIOD_MS);
     }
 }
