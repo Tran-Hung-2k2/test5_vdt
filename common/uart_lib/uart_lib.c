@@ -5,47 +5,44 @@
 #include "freertos/task.h"
 #include <stdio.h>
 #include <string.h>
+#include <uart_lib.h>
+
+#define PATTERN_CHR_NUM (3)
+#define BUF_SIZE        (1024)
+#define RD_BUF_SIZE     (BUF_SIZE)
 
 static const char *TAG = "uart_events";
-
-#define EX_UART_NUM     UART_NUM_0
-#define PATTERN_CHR_NUM (3)
-
-#define BUF_SIZE    (1024)
-#define RD_BUF_SIZE (BUF_SIZE)
 static QueueHandle_t uart_queue;
 static int uart_num;
+data_event_callback_t data_event_callback = NULL;
 
 static void uart_event_task(void *pvParameters) {
     uart_event_t event;
     size_t buffered_size;
     uint8_t *dtmp = (uint8_t *) malloc(RD_BUF_SIZE);
-    for (;;) {
+    while (1) {
         // Waiting for UART event.
         if (xQueueReceive(uart_queue, (void *) &event,
                           (TickType_t) portMAX_DELAY)) {
             bzero(dtmp, RD_BUF_SIZE);
-            ESP_LOGI(TAG, "uart[%d] event:", EX_UART_NUM);
+            ESP_LOGI(TAG, "uart[%d] event:", uart_num);
             switch (event.type) {
                 // Event of UART receving data
                 case UART_DATA:
-                    ESP_LOGI(TAG, "[UART DATA]: %d", event.size);
-                    uart_read_bytes(EX_UART_NUM, dtmp, event.size,
-                                    portMAX_DELAY);
-                    ESP_LOGI(TAG, "[DATA EVT]:");
-                    uart_write_bytes(EX_UART_NUM, (const char *) dtmp,
-                                     event.size);
+                    uart_read_bytes(uart_num, dtmp, event.size, portMAX_DELAY);
+                    if (data_event_callback != NULL)
+                        data_event_callback((char *) dtmp, event.size);
                     break;
                 // Event of HW FIFO overflow detected
                 case UART_FIFO_OVF:
                     ESP_LOGI(TAG, "hw fifo overflow");
-                    uart_flush_input(EX_UART_NUM);
+                    uart_flush_input(uart_num);
                     xQueueReset(uart_queue);
                     break;
                 // Event of UART ring buffer full
                 case UART_BUFFER_FULL:
                     ESP_LOGI(TAG, "ring buffer full");
-                    uart_flush_input(EX_UART_NUM);
+                    uart_flush_input(uart_num);
                     xQueueReset(uart_queue);
                     break;
                 // Event of UART RX break detected
@@ -62,20 +59,20 @@ static void uart_event_task(void *pvParameters) {
                     break;
                 // UART_PATTERN_DET
                 case UART_PATTERN_DET:
-                    uart_get_buffered_data_len(EX_UART_NUM, &buffered_size);
-                    int pos = uart_pattern_pop_pos(EX_UART_NUM);
+                    uart_get_buffered_data_len(uart_num, &buffered_size);
+                    int pos = uart_pattern_pop_pos(uart_num);
                     ESP_LOGI(
                         TAG,
                         "[UART PATTERN DETECTED] pos: %d, buffered size: %d",
                         pos, buffered_size);
                     if (pos == -1) {
-                        uart_flush_input(EX_UART_NUM);
+                        uart_flush_input(uart_num);
                     } else {
-                        uart_read_bytes(EX_UART_NUM, dtmp, pos,
+                        uart_read_bytes(uart_num, dtmp, pos,
                                         100 / portTICK_PERIOD_MS);
                         uint8_t pat[PATTERN_CHR_NUM + 1];
                         memset(pat, 0, sizeof(pat));
-                        uart_read_bytes(EX_UART_NUM, pat, PATTERN_CHR_NUM,
+                        uart_read_bytes(uart_num, pat, PATTERN_CHR_NUM,
                                         100 / portTICK_PERIOD_MS);
                         ESP_LOGI(TAG, "read data: %s", dtmp);
                         ESP_LOGI(TAG, "read pat : %s", pat);
@@ -126,4 +123,12 @@ void uart_setup(int uart_num_config, int uart_tx_pin, int uart_rx_pin,
     // Create a task to handler UART event from ISR
     xTaskCreate(uart_event_task, "uart_event_task", sizeOfStack, NULL, 12,
                 NULL);
+}
+
+void uart_set_callback(void *cb) {
+    data_event_callback = cb;  //
+}
+
+void uart_send_data(char *data) {
+    uart_write_bytes(uart_num, data, strlen(data));
 }
