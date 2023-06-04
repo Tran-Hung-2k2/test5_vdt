@@ -21,12 +21,12 @@
     "{\"cell\":%d,\"pci\":%d,\"rsrp\":%d,\"rsrq\":%d,\"sinr\":%d,\"cellid\":%" \
     "d,\"longitude\":%f,\"latitude\":%f}\r\n"
 #define AT_CMD_PUB_MQTT "AT+SMPUB=\"messages/" DEVICE_ID "/update\",%d,0,1\r\n"
-#define CLBS_RES        "+CLBS: 0,106.642897,29.487558,500\n\nOK\n"
-#define CENG_RES                                                               \
-    "+CENG:1,1,3,LTE "                                                         \
-    "NB-IOT\n\n+CENG:0,\"1791,322,-72,-60,-12,2,45119,152142613,452,04,"       \
-    "255\"\n+CENG:1,\"1791,119,-80,-61,-17,2\"\n+CENG:2,\"1791,410,-81,-61,-"  \
-    "19,2\"\n\nOK\n"
+// #define CLBS_RES        "+CLBS: 0,106.642897,29.487558,500\n\nOK\n"
+// #define CENG_RES                                                               \
+//     "+CENG:1,1,3,LTE "                                                         \
+//     "NB-IOT\n\n+CENG:0,\"1791,322,-72,-60,-12,2,45119,152142613,452,04,"       \
+//     "255\"\n+CENG:1,\"1791,119,-80,-61,-17,2\"\n+CENG:2,\"1791,410,-81,-61,-"  \
+//     "19,2\"\n\nOK\n"
 
 const char at_cmd_connect_mqtt[][100] = {
     "AT+CNACT=0,1\r\n",
@@ -128,10 +128,10 @@ void uart_event_task(void *pvParameters) {
     vTaskDelete(NULL);
 }
 
-void send_at_cmd(const char *src) {
+void send_at_cmd(const char *src, int delay) {
     ESP_LOGI(PRINTF, "%s", src);
     uart_write_bytes(EX_UART_NUM, src, strlen(src));
-    vTaskDelay(2000 / portTICK_PERIOD_MS);
+    vTaskDelay(delay / portTICK_PERIOD_MS);
 }
 
 void powerOnSetup() {
@@ -218,6 +218,7 @@ void app_main(void) {
             send_at_cmd("AT+CENG?\r\n");
             count--;
         }
+
         if (count != 0) {
             vTaskDelay(5000 / portTICK_PERIOD_MS);
             success = connect_mqtt_broker();
