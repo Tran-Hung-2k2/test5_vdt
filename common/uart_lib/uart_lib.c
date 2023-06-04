@@ -13,8 +13,9 @@
 
 static const char *TAG = "uart_events";
 static QueueHandle_t uart_queue;
-static int uart_num;
 data_event_callback_t data_event_callback = NULL;
+static int uart_num;
+static int delay_before_read_data = 0;
 
 static void uart_event_task(void *pvParameters) {
     uart_event_t event;
@@ -25,13 +26,13 @@ static void uart_event_task(void *pvParameters) {
         if (xQueueReceive(uart_queue, (void *) &event,
                           (TickType_t) portMAX_DELAY)) {
             bzero(dtmp, RD_BUF_SIZE);
-            ESP_LOGI(TAG, "uart[%d] event:", uart_num);
             switch (event.type) {
                 // Event of UART receving data
                 case UART_DATA:
+                    vTaskDelay(delay_before_read_data / portTICK_PERIOD_MS);
                     uart_read_bytes(uart_num, dtmp, event.size, portMAX_DELAY);
                     if (data_event_callback != NULL)
-                        data_event_callback((char *) dtmp, event.size);
+                        data_event_callback((char *) dtmp, (int) event.size);
                     break;
                 // Event of HW FIFO overflow detected
                 case UART_FIFO_OVF:
@@ -91,9 +92,9 @@ static void uart_event_task(void *pvParameters) {
 }
 
 void uart_setup(int uart_num_config, int uart_tx_pin, int uart_rx_pin,
-                const uint32_t sizeOfStack) {
+                const uint32_t sizeOfStack, void *callback) {
     uart_num = uart_num_config;
-
+    data_event_callback = callback;
     esp_log_level_set(TAG, ESP_LOG_INFO);
 
     uart_config_t uart_config = {
@@ -108,27 +109,24 @@ void uart_setup(int uart_num_config, int uart_tx_pin, int uart_rx_pin,
     uart_driver_install(uart_num, BUF_SIZE * 2, BUF_SIZE * 2, 20, &uart_queue,
                         0);
     uart_param_config(uart_num, &uart_config);
-
     // Set UART log level
     esp_log_level_set(TAG, ESP_LOG_INFO);
     // Set UART pins (using UART0 default pins ie no changes.)
     uart_set_pin(uart_num, uart_tx_pin, uart_rx_pin, UART_PIN_NO_CHANGE,
                  UART_PIN_NO_CHANGE);
-
     // Set uart pattern detect function.
     uart_enable_pattern_det_baud_intr(uart_num, '+', PATTERN_CHR_NUM, 9, 0, 0);
     // Reset the pattern queue length to record at most 20 pattern positions.
     uart_pattern_queue_reset(uart_num, 20);
-
     // Create a task to handler UART event from ISR
     xTaskCreate(uart_event_task, "uart_event_task", sizeOfStack, NULL, 12,
                 NULL);
 }
 
-void uart_set_callback(void *cb) {
-    data_event_callback = cb;  //
+void uart_write_data(char *data) {
+    uart_write_bytes(uart_num, data, strlen(data));
 }
 
-void uart_send_data(char *data) {
-    uart_write_bytes(uart_num, data, strlen(data));
+void uart_set_delay_before_read_data(int delay_ms) {
+    delay_before_read_data = delay_ms;
 }
