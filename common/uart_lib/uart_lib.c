@@ -13,7 +13,7 @@ static const char *TAG = "uart_events";
 
 #define BUF_SIZE    (1024)
 #define RD_BUF_SIZE (BUF_SIZE)
-static QueueHandle_t uart0_queue;
+static QueueHandle_t uart_queue;
 static int uart_num;
 
 static void uart_event_task(void *pvParameters) {
@@ -22,7 +22,7 @@ static void uart_event_task(void *pvParameters) {
     uint8_t *dtmp = (uint8_t *) malloc(RD_BUF_SIZE);
     for (;;) {
         // Waiting for UART event.
-        if (xQueueReceive(uart0_queue, (void *) &event,
+        if (xQueueReceive(uart_queue, (void *) &event,
                           (TickType_t) portMAX_DELAY)) {
             bzero(dtmp, RD_BUF_SIZE);
             ESP_LOGI(TAG, "uart[%d] event:", EX_UART_NUM);
@@ -40,16 +40,13 @@ static void uart_event_task(void *pvParameters) {
                 case UART_FIFO_OVF:
                     ESP_LOGI(TAG, "hw fifo overflow");
                     uart_flush_input(EX_UART_NUM);
-                    xQueueReset(uart0_queue);
+                    xQueueReset(uart_queue);
                     break;
                 // Event of UART ring buffer full
                 case UART_BUFFER_FULL:
                     ESP_LOGI(TAG, "ring buffer full");
-                    // If buffer full happened, you should consider encreasing
-                    // your buffer size As an example, we directly flush the rx
-                    // buffer here in order to read more data.
                     uart_flush_input(EX_UART_NUM);
-                    xQueueReset(uart0_queue);
+                    xQueueReset(uart_queue);
                     break;
                 // Event of UART RX break detected
                 case UART_BREAK:
@@ -72,11 +69,6 @@ static void uart_event_task(void *pvParameters) {
                         "[UART PATTERN DETECTED] pos: %d, buffered size: %d",
                         pos, buffered_size);
                     if (pos == -1) {
-                        // There used to be a UART_PATTERN_DET event, but the
-                        // pattern position queue is full so that it can not
-                        // record the position. We should set a larger queue
-                        // size. As an example, we directly flush the rx buffer
-                        // here.
                         uart_flush_input(EX_UART_NUM);
                     } else {
                         uart_read_bytes(EX_UART_NUM, dtmp, pos,
@@ -116,7 +108,7 @@ void uart_setup(int uart_num_config, int uart_tx_pin, int uart_rx_pin,
         .source_clk = UART_SCLK_DEFAULT,
     };
 
-    uart_driver_install(uart_num, BUF_SIZE * 2, BUF_SIZE * 2, 20, &uart0_queue,
+    uart_driver_install(uart_num, BUF_SIZE * 2, BUF_SIZE * 2, 20, &uart_queue,
                         0);
     uart_param_config(uart_num, &uart_config);
 
