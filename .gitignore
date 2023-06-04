@@ -1,0 +1,5 @@
+build
+sdkconfig
+sdkconfig.defaults
+sdkconfig.old
+esp-idf-v4.2.2
