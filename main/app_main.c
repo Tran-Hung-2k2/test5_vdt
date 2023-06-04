@@ -232,4 +232,3 @@ void app_main(void) {
         vTaskDelay(5000 / portTICK_PERIOD_MS);
     }
 }
-ad
