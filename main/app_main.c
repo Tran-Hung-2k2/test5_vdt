@@ -94,7 +94,7 @@ void powerOn() {
     vTaskDelay(2000 / portTICK_PERIOD_MS);
     gpio_set_level(POWER_GPIO_PIN, 0);
     ESP_LOGI(LOG_AT_CMD, "Power on");
-    vTaskDelay(10 / portTICK_PERIOD_MS);
+    vTaskDelay(10000 / portTICK_PERIOD_MS);
 }
 
 bool send_at_handler(char *command, int current_at_cmd, int resend_count,
@@ -141,6 +141,6 @@ void app_main(void) {
         } else {
             ESP_LOGI(LOG_AT_CMD, "Power off FAILURE");
         }
-        vTaskDelay(3000 / portTICK_PERIOD_MS);
+        vTaskDelay(10000 / portTICK_PERIOD_MS);
     }
 }
