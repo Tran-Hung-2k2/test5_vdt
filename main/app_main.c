@@ -39,17 +39,17 @@ struct AT_command {
 };
 
 struct AT_command at_cmd[] = {
-    {"ATE0\r\n", "E0", 2000},
-    {"AT+CENG?\r\n", "CENG?", 3000},
-    {"AT+CNACT=0,1\r\n", "CNACT", 3000},
-    {"AT+SMCONF=\"URL\",\"" MQTT_SERVER "\"," PORT "\r\n", "SMCONF", 500},
-    {"AT+SMCONF=\"CLIENTID\",\"" CLIENT_ID "\"\r\n", "SMCONF", 500},
-    {"AT+SMCONF=\"USERNAME\",\"" USERNAME "\"\r\n", "SMCONF", 500},
-    {"AT+SMCONF=\"PASSWORD\",\"" PASSWORD "\"\r\n", "SMCONF", 500},
-    {"AT+SMCONN\r\n", "SMCONN", 2000},
-    {"public_msg\r\n", "SMPUB", 2000},
-    {"public_data\r\n", "", 2000},
-    {"AT+CPOWD=1\r\n", "CPOWD", 5000},
+    {"ATE0\r\n", "OK", 2000},
+    {"AT+CENG?\r\n", "LTE NB-IOT", 3000},
+    {"AT+CNACT=0,1\r\n", "ACTIVE", 3000},
+    {"AT+SMCONF=\"URL\",\"" MQTT_SERVER "\"," PORT "\r\n", "OK", 500},
+    {"AT+SMCONF=\"CLIENTID\",\"" CLIENT_ID "\"\r\n", "OK", 500},
+    {"AT+SMCONF=\"USERNAME\",\"" USERNAME "\"\r\n", "OK", 500},
+    {"AT+SMCONF=\"PASSWORD\",\"" PASSWORD "\"\r\n", "OK", 500},
+    {"AT+SMCONN\r\n", "OK", 2000},
+    {"public_msg\r\n", ">", 2000},
+    {"public_data\r\n", "OK", 2000},
+    {"AT+CPOWD=1\r\n", "NORMAL POWER DOWN", 5000},
 };
 
 void data_CENG_handler(const char *data) {
