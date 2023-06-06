@@ -35,6 +35,7 @@ static bool isSuccess;
 static bool while_send = false;
 static bool is_resend = false;
 static char recv_data[CMD_SIZE];
+static int len;
 struct AT_command {
     char command[CMD_SIZE];
     char res_success[CMD_SIZE];
@@ -44,12 +45,13 @@ struct AT_command {
 struct AT_command at_cmd[] = {
     {"ATE0\r\n", "OK", 10000},
     {"AT+CENG?\r\n", "LTE NB-IOT", 20000},
-    {"AT+CNACT=0,1\r\n", "", 15000},
+    {"AT+CNACT=0,1\r\n", "OK", 15000},
+    {"AT+CLBS=1,0\r\n", "CLBS: 0", 20000},
     {"AT+SMCONF=\"URL\",\"" MQTT_SERVER "\"," PORT "\r\n", "OK", 10000},
-    {"AT+SMCONF=\"CLIENTID\",\"" CLIENT_ID "\"\r\n", "", 10000},
+    {"AT+SMCONF=\"CLIENTID\",\"" CLIENT_ID "\"\r\n", "OK", 10000},
     {"AT+SMCONF=\"USERNAME\",\"" USERNAME "\"\r\n", "OK", 10000},
     {"AT+SMCONF=\"PASSWORD\",\"" PASSWORD "\"\r\n", "OK", 10000},
-    {"AT+SMCONN\r\n", "", 20000},
+    {"AT+SMCONN\r\n", "OK", 20000},
     {"public_msg\r\n", "", 10000},
     {"public_data\r\n", "OK", 10000},
     {"AT+CPOWD=1\r\n", "NORMAL", 10000},
@@ -60,6 +62,14 @@ void data_CENG_handler(const char *data) {
     sscanf(data, "%[^\"]\"%d, %d, %d, %d, %d, %d, %d, %d", str, &tmp, &pci,
            &rsrp, &tmp, &rsrq, &sinr, &tmp, &cellid);
 
+    ESP_LOGI("Set_CENG_data", "SUCCESS");
+    xEventGroupSetBits(xEventGroup, AT_CMD_SUCCESS_BIT);
+}
+
+void data_CLBS_handler(const char *data) {
+    char str[CMD_SIZE];
+    sscanf(data, "%[^,],%f,%f", str, &longitude, &latitude);
+
     char public_data[CMD_SIZE];
     snprintf(public_data, CMD_SIZE, PUB_DATA, pci, rsrp, rsrq, sinr, cellid,
              longitude, latitude);
@@ -67,9 +77,9 @@ void data_CENG_handler(const char *data) {
     char public_mess[CMD_SIZE];
     snprintf(public_mess, CMD_SIZE, AT_CMD_PUB_MQTT, strlen(public_data));
 
-    memcpy(at_cmd[8].command, public_mess, strlen(public_mess));
-    memcpy(at_cmd[9].command, public_data, strlen(public_data));
-    ESP_LOGI("Set_CENG_data", "SUCCESS");
+    memcpy(at_cmd[len - 3].command, public_mess, strlen(public_mess));
+    memcpy(at_cmd[len - 2].command, public_data, strlen(public_data));
+    ESP_LOGI("Set_CLBS_data", "SUCCESS");
     xEventGroupSetBits(xEventGroup, AT_CMD_SUCCESS_BIT);
 }
 
@@ -80,8 +90,7 @@ void data_uart_handler(char *data, int len) {
         if (strstr(data, at_cmd[cur_cmd_id].res_success) != NULL)
             xEventGroupSetBits(xEventGroup, AT_CMD_SUCCESS_BIT);
         else {
-            ESP_LOGI("Response", "FAIL: %s", data);
-            is_resend = true;
+            ESP_LOGI("Fail_response", "%s", data);
             xEventGroupSetBits(xEventGroup, AT_CMD_FAILURE_BIT);
         }
     }
@@ -105,15 +114,23 @@ bool send_at_cmd(int cmd_id, int resend_count) {
     while_send = true;
     int count = resend_count;
     while (cur_cmd_id == cmd_id && count > 0) {
-        if (is_resend) vTaskDelay(5000 / portTICK_PERIOD_MS);
-        ESP_LOGI("Send", "%s", at_cmd[cmd_id].command);
+        if (is_resend) {
+            vTaskDelay(5000 / portTICK_PERIOD_MS);
+            ESP_LOGI("Resend", "%s", at_cmd[cmd_id].command);
+        } else {
+            ESP_LOGI("Send", "%s", at_cmd[cmd_id].command);
+        }
         uart_write_data(at_cmd[cmd_id].command, strlen(at_cmd[cmd_id].command));
         uxBits = xEventGroupWaitBits(
             xEventGroup, AT_CMD_SUCCESS_BIT | AT_CMD_FAILURE_BIT, pdTRUE,
             pdFALSE, pdMS_TO_TICKS(at_cmd[cmd_id].timeout));
         if (uxBits & AT_CMD_SUCCESS_BIT) {
-            if (strstr(at_cmd[cmd_id].command, "AT+CENG?") != NULL)
+            if (strstr(at_cmd[cmd_id].command, "AT+CENG?") != NULL) {
                 data_CENG_handler(recv_data);
+            } else if (strstr(at_cmd[cmd_id].command, "AT+CLBS=1,0") != NULL) {
+                is_resend = true;
+                data_CLBS_handler(recv_data);
+            }
             cur_cmd_id++;
         } else {
             count--;
@@ -131,7 +148,7 @@ void app_main(void) {
     uart_init(EX_UART_NUM, GPIO_NUM_17, GPIO_NUM_16, 2048, data_uart_handler);
     powerOnSetup();
     xEventGroup = xEventGroupCreate();
-    int len = sizeof(at_cmd) / sizeof(at_cmd[0]);
+    len = sizeof(at_cmd) / sizeof(at_cmd[0]);
     while (1) {
         powerOn();
         for (int id = 0; id < len; id++) {
@@ -143,6 +160,6 @@ void app_main(void) {
             vTaskDelay(3000 / portTICK_PERIOD_MS);
         }
 
-        vTaskDelay(300000 / portTICK_PERIOD_MS);
+        vTaskDelay(50000 / portTICK_PERIOD_MS);
     }
 }
