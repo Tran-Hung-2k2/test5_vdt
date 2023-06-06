@@ -40,21 +40,22 @@ struct AT_command {
     char command[CMD_SIZE];
     char res_success[CMD_SIZE];
     int timeout;
+    int resend;
 };
 
 struct AT_command at_cmd[] = {
-    {"ATE0\r\n", "OK", 10000},
-    {"AT+CENG?\r\n", "LTE NB-IOT", 20000},
-    {"AT+CNACT=0,1\r\n", "OK", 15000},
-    {"AT+CLBS=1,0\r\n", "CLBS: 0", 20000},
-    {"AT+SMCONF=\"URL\",\"" MQTT_SERVER "\"," PORT "\r\n", "OK", 10000},
-    {"AT+SMCONF=\"CLIENTID\",\"" CLIENT_ID "\"\r\n", "OK", 10000},
-    {"AT+SMCONF=\"USERNAME\",\"" USERNAME "\"\r\n", "OK", 10000},
-    {"AT+SMCONF=\"PASSWORD\",\"" PASSWORD "\"\r\n", "OK", 10000},
-    {"AT+SMCONN\r\n", "OK", 20000},
-    {"public_msg\r\n", "", 10000},
-    {"public_data\r\n", "OK", 10000},
-    {"AT+CPOWD=1\r\n", "NORMAL", 10000},
+    {"ATE0\r\n", "OK", 500, 15},
+    {"AT+CENG?\r\n", "LTE NB-IOT", 20000, 10},
+    {"AT+CNACT=0,1\r\n", "OK", 15000, 3},
+    {"AT+CLBS=1,0\r\n", "CLBS: 0", 20000, 15},
+    {"AT+SMCONF=\"URL\",\"" MQTT_SERVER "\"," PORT "\r\n", "OK", 10000, 2},
+    {"AT+SMCONF=\"CLIENTID\",\"" CLIENT_ID "\"\r\n", "OK", 10000, 2},
+    {"AT+SMCONF=\"USERNAME\",\"" USERNAME "\"\r\n", "OK", 10000, 2},
+    {"AT+SMCONF=\"PASSWORD\",\"" PASSWORD "\"\r\n", "OK", 10000, 2},
+    {"AT+SMCONN\r\n", "OK", 20000, 3},
+    {"AT+SMPUB=\"messages/" DEVICE_ID "/update\",0,0,1\r\n", "", 10000, 2},
+    {"{publish_messages}\r\n", "OK", 10000, 2},
+    {"AT+CPOWD=1\r\n", "NORMAL", 10000, 10},
 };
 
 void data_CENG_handler(const char *data) {
@@ -90,7 +91,8 @@ void data_uart_handler(char *data, int len) {
         if (strstr(data, at_cmd[cur_cmd_id].res_success) != NULL)
             xEventGroupSetBits(xEventGroup, AT_CMD_SUCCESS_BIT);
         else {
-            ESP_LOGI("Fail_response", "%s", data);
+            ESP_LOGW("Fail_response", "%s", data);
+            is_resend = true;
             xEventGroupSetBits(xEventGroup, AT_CMD_FAILURE_BIT);
         }
     }
@@ -103,19 +105,19 @@ void powerOnSetup() {
 
 void powerOn() {
     gpio_set_level(POWER_GPIO_PIN, 0);
-    vTaskDelay(2000 / portTICK_PERIOD_MS);
+    vTaskDelay(1500 / portTICK_PERIOD_MS);
     gpio_set_level(POWER_GPIO_PIN, 1);
     ESP_LOGI("STATUS", "Power on");
-    vTaskDelay(20000 / portTICK_PERIOD_MS);
+    vTaskDelay(5000 / portTICK_PERIOD_MS);
 }
 
-bool send_at_cmd(int cmd_id, int resend_count) {
+bool send_at_cmd(int cmd_id) {
     cur_cmd_id = cmd_id;
     while_send = true;
-    int count = resend_count;
+    int count = at_cmd[cmd_id].resend;
     while (cur_cmd_id == cmd_id && count > 0) {
         if (is_resend) {
-            vTaskDelay(5000 / portTICK_PERIOD_MS);
+            vTaskDelay(3000 / portTICK_PERIOD_MS);
             ESP_LOGI("Resend", "%s", at_cmd[cmd_id].command);
         } else {
             ESP_LOGI("Send", "%s", at_cmd[cmd_id].command);
@@ -128,7 +130,6 @@ bool send_at_cmd(int cmd_id, int resend_count) {
             if (strstr(at_cmd[cmd_id].command, "AT+CENG?") != NULL) {
                 data_CENG_handler(recv_data);
             } else if (strstr(at_cmd[cmd_id].command, "AT+CLBS=1,0") != NULL) {
-                is_resend = true;
                 data_CLBS_handler(recv_data);
             }
             cur_cmd_id++;
@@ -148,18 +149,20 @@ void app_main(void) {
     uart_init(EX_UART_NUM, GPIO_NUM_17, GPIO_NUM_16, 2048, data_uart_handler);
     powerOnSetup();
     xEventGroup = xEventGroupCreate();
+    TickType_t start, finish;
     len = sizeof(at_cmd) / sizeof(at_cmd[0]);
     while (1) {
+        start = xTaskGetTickCount();
         powerOn();
         for (int id = 0; id < len; id++) {
-            isSuccess = send_at_cmd(id, 10);
+            isSuccess = send_at_cmd(id);
             if (!isSuccess) {
                 ESP_LOGI("STATUS", "FAILURE");
                 id = len - 2;
             }
-            vTaskDelay(3000 / portTICK_PERIOD_MS);
+            vTaskDelay(1000 / portTICK_PERIOD_MS);
         }
-
-        vTaskDelay(50000 / portTICK_PERIOD_MS);
+        finish = xTaskGetTickCount();
+        vTaskDelay((300000 / portTICK_PERIOD_MS) - (finish - start));
     }
 }
