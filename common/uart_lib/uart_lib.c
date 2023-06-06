@@ -17,7 +17,7 @@ data_event_callback_t data_event_callback = NULL;
 static int uart_num;
 static int delay_before_read_data = 0;
 
-static void uart_event_task(void *pvParameters) {
+void uart_event_task(void *pvParameters) {
     uart_event_t event;
     size_t buffered_size;
     uint8_t *dtmp = (uint8_t *) malloc(RD_BUF_SIZE);
@@ -91,10 +91,10 @@ static void uart_event_task(void *pvParameters) {
     vTaskDelete(NULL);
 }
 
-void uart_setup(int uart_num_config, int uart_tx_pin, int uart_rx_pin,
-                const uint32_t sizeOfStack, void *callback) {
+void uart_init(int uart_num_config, int uart_tx_pin, int uart_rx_pin,
+               const uint32_t sizeOfStack, void *data_event_handler) {
     uart_num = uart_num_config;
-    data_event_callback = callback;
+    data_event_callback = data_event_handler;
     esp_log_level_set(TAG, ESP_LOG_INFO);
 
     uart_config_t uart_config = {
@@ -123,8 +123,8 @@ void uart_setup(int uart_num_config, int uart_tx_pin, int uart_rx_pin,
                 NULL);
 }
 
-void uart_write_data(char *data) {
-    uart_write_bytes(uart_num, data, strlen(data));
+void uart_write_data(char *data, int len) {
+    uart_write_bytes(uart_num, data, len);
 }
 
 void uart_set_delay_before_read_data(int delay_ms) {
