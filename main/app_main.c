@@ -146,7 +146,7 @@ bool send_at_cmd(int cmd_id) {
 }
 
 void app_main(void) {
-    uart_init(EX_UART_NUM, GPIO_NUM_17, GPIO_NUM_16, 2048, data_uart_handler);
+    uart_init(EX_UART_NUM, GPIO_NUM_17, GPIO_NUM_16, 4096, data_uart_handler);
     powerOnSetup();
     xEventGroup = xEventGroupCreate();
     TickType_t start, finish;
