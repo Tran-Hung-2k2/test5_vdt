@@ -15,12 +15,15 @@
 #define AT_CMD_SUCCESS_BIT (1 << 0)
 #define AT_CMD_FAILURE_BIT (1 << 1)
 
-#define MQTT_SERVER "mqtt.innoway.vn"
+#define MQTT_SERVER "broker.hivemq.com"
 #define PORT        "1883"
-#define DEVICE_ID   "129299aa-99a5-49c5-b758-e7f352e74801"
-#define CLIENT_ID   "hungok"
-#define USERNAME    "hungok"
-#define PASSWORD    "MCSvgZLO56gyYTOK9a5EVCxbb1gsjWLe"
+#define DEVICE_ID   "647ef8476acc038a2885462d"
+// #define MQTT_SERVER "mqtt.innoway.vn"
+// #define PORT        "1883"
+// #define DEVICE_ID   "b97f33f4-7a30-4d2b-a9cc-d53a5806c483"
+#define CLIENT_ID "hungok"
+#define USERNAME  "hungok"
+#define PASSWORD  "MCSvgZLO56gyYTOK9a5EVCxbb1gsjWLe"
 #define PUB_DATA                                                               \
     "{\"pci\":%d,\"rsrp\":%d,\"rsrq\":%d,\"sinr\":%d,\"cellid\":%"             \
     "d,\"longitude\":%f,\"latitude\":%f}\r\n"
@@ -163,6 +166,6 @@ void app_main(void) {
             vTaskDelay(1000 / portTICK_PERIOD_MS);
         }
         finish = xTaskGetTickCount();
-        vTaskDelay((300000 / portTICK_PERIOD_MS) - (finish - start));
+        vTaskDelay((5 * 60000 / portTICK_PERIOD_MS) - (finish - start));
     }
 }
