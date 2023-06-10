@@ -26,10 +26,10 @@
 // #define DEVICE_ID   "b97f33f4-7a30-4d2b-a9cc-d53a5806c483"
 #define CLIENT_ID "hungok"
 #define USERNAME  "hungok"
-#define PASSWORD  "MCSvgZLO56gyYTOK9a5EVCxbb1gsjWLe"
+#define PASSWORD  "ls8M4bx7zK8BKU6xj63LbHOLzl57X9Hy"
 
 // Định dạng AT command để publish dữ liệu lên MQTT
-#define AT_CMD_PUB_MQTT "AT+SMPUB=\"messages/" DEVICE_ID "/update\",%d,0,1\r\n"
+#define AT_CMD_PUB_MQTT "AT+SMPUB=\"messages/" DEVICE_ID "/sub\",%d,0,1\r\n"
 
 // Định dạng chuỗi dữ liệu để gửi lên MQTT
 #define PUB_DATA                                                               \
